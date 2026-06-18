@@ -21,6 +21,112 @@ bun run version   # 验证版本
 
 ---
 
+## 配置第三方 API（网关 / 代理）
+
+本项目支持通过环境变量对接任何兼容 Anthropic API 格式的第三方服务（如阿里云 DashScope、LiteLLM、OpenRouter 等）。
+
+### 方式一：环境变量（推荐）
+
+| 环境变量 | 说明 | 示例 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | API 密钥（必填） | `sk-your-dashscope-key` |
+| `ANTHROPIC_BASE_URL` | API 基础地址（必填） | `https://dashscope.aliyuncs.com/apps/anthropic` |
+| `ANTHROPIC_MODEL` | 默认模型（可选） | `deepseek-v4-flash` |
+| `ANTHROPIC_CUSTOM_MODEL_OPTION` | 自定义模型 ID（可选，见下方说明） | `deepseek-v4-flash` |
+| `ANTHROPIC_CUSTOM_MODEL_OPTION_NAME` | 自定义模型显示名（可选） | `DeepSeek V4 Flash` |
+| `ANTHROPIC_CUSTOM_HEADERS` | 自定义请求头（JSON 格式，可选） | `{"Authorization":"Bearer sk-xxx"}` |
+
+#### 使用 DashScope（阿里云）示例
+
+```bash
+# 启动前设置环境变量
+set ANTHROPIC_API_KEY=sk-你的dashscope密钥
+set ANTHROPIC_BASE_URL=https://dashscope.aliyuncs.com/apps/anthropic
+set ANTHROPIC_MODEL=deepseek-v4-flash
+
+# 然后启动
+bun run dev
+```
+
+> **注意**：当设置 `ANTHROPIC_API_KEY` 作为外部 API Key 时，程序会自动跳过 OAuth 登录和连通性检查，直接使用 API Key 认证。
+
+#### 自定义模型配置
+
+如果第三方模型的 ID 不在内置列表中，请在 `.claude/settings.json` 中配置：
+
+```json
+{
+  "availableModels": ["deepseek-v4-flash"],
+  "env": {
+    "ANTHROPIC_CUSTOM_MODEL_OPTION": "deepseek-v4-flash",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "DeepSeek V4 Flash"
+  }
+}
+```
+
+或者通过环境变量绕过模型校验：
+
+```bash
+set ANTHROPIC_CUSTOM_MODEL_OPTION=deepseek-v4-flash
+```
+
+### 方式二：`.claude/settings.json`
+
+在项目根目录或用户目录创建 `.claude/settings.json`：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "sk-你的dashscope密钥",
+    "ANTHROPIC_BASE_URL": "https://dashscope.aliyuncs.com/apps/anthropic",
+    "ANTHROPIC_MODEL": "deepseek-v4-flash"
+  }
+}
+```
+
+### 方式三：`--settings` CLI 参数
+
+```bash
+bun run dev -- --settings ./my-settings.json
+```
+
+`my-settings.json` 内容：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "sk-xxx",
+    "ANTHROPIC_BASE_URL": "https://dashscope.aliyuncs.com/apps/anthropic"
+  }
+}
+```
+
+### 方式四：`--bare` 极简模式
+
+跳过所有非必要初始化（hooks、LSP、插件同步等）：
+
+```bash
+set ANTHROPIC_API_KEY=sk-xxx
+set ANTHROPIC_BASE_URL=https://dashscope.aliyuncs.com/apps/anthropic
+bun run dev -- --bare
+```
+
+### 原理说明
+
+| 源码位置 | 作用 |
+|---|---|
+| `src/services/api/client.ts` | API 客户端创建入口，读取 `ANTHROPIC_API_KEY`、`ANTHROPIC_BASE_URL` |
+| `src/utils/auth.ts` `isAnthropicAuthEnabled()` | 检测到外部 API Key 时自动禁用 OAuth 流程 |
+| `src/utils/model/providers.ts` | 判断是否 3P 提供商（Bedrock/Vertex/Foundry） |
+| `src/utils/model/modelAllowlist.ts` | `availableModels` 白名单校验 |
+| `src/utils/managedEnvConstants.ts` | 安全/非安全环境变量分类 |
+| `src/constants/oauth.ts` | OAuth 配置，默认 `api.anthropic.com` |
+| `@anthropic-ai/sdk` | SDK 原生支持 `ANTHROPIC_BASE_URL` 环境变量，自动覆盖请求地址 |
+
+`ANTHROPIC_BASE_URL` 被 `@anthropic-ai/sdk` 原生支持——SDK 初始化时自动读取该环境变量，将 API 请求路由到自定义地址，无需修改源码。
+
+---
+
 ## 从源码中发现的 7 大隐藏功能
 
 通过阅读还原后的 1,987 个 TypeScript 源文件，我们发现了大量未公开的隐藏功能。这些功能通过**编译开关**（`feature()`）和**用户类型**（`USER_TYPE`）进行门控，外部发布版中大部分被裁剪。
