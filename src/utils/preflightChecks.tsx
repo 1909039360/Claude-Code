@@ -1,76 +1,16 @@
 import { c as _c } from "react/compiler-runtime";
-import axios from 'axios';
 import React, { useEffect, useState } from 'react';
-import { logEvent } from 'src/services/analytics/index.js';
 import { Spinner } from '../components/Spinner.js';
-import { getOauthConfig } from '../constants/oauth.js';
 import { useTimeout } from '../hooks/useTimeout.js';
 import { Box, Text } from '../ink.js';
-import { getSSLErrorHint } from '../services/api/errorUtils.js';
-import { getUserAgent } from './http.js';
-import { logError } from './log.js';
 export interface PreflightCheckResult {
   success: boolean;
   error?: string;
   sslHint?: string;
 }
 async function checkEndpoints(): Promise<PreflightCheckResult> {
-  try {
-    const oauthConfig = getOauthConfig();
-    const tokenUrl = new URL(oauthConfig.TOKEN_URL);
-    const endpoints = [`${oauthConfig.BASE_API_URL}/api/hello`, `${tokenUrl.origin}/v1/oauth/hello`];
-    const checkEndpoint = async (url: string): Promise<PreflightCheckResult> => {
-      try {
-        const response = await axios.get(url, {
-          headers: {
-            'User-Agent': getUserAgent()
-          }
-        });
-        if (response.status !== 200) {
-          const hostname = new URL(url).hostname;
-          return {
-            success: false,
-            error: `Failed to connect to ${hostname}: Status ${response.status}`
-          };
-        }
-        return {
-          success: true
-        };
-      } catch (error) {
-        const hostname = new URL(url).hostname;
-        const sslHint = getSSLErrorHint(error);
-        return {
-          success: false,
-          error: `Failed to connect to ${hostname}: ${error instanceof Error ? (error as ErrnoException).code || error.message : String(error)}`,
-          sslHint: sslHint ?? undefined
-        };
-      }
-    };
-    const results = await Promise.all(endpoints.map(checkEndpoint));
-    const failedResult = results.find(result => !result.success);
-    if (failedResult) {
-      // Log failure to Statsig
-      logEvent('tengu_preflight_check_failed', {
-        isConnectivityError: false,
-        hasErrorMessage: !!failedResult.error,
-        isSSLError: !!failedResult.sslHint
-      });
-    }
-    return failedResult || {
-      success: true
-    };
-  } catch (error) {
-    logError(error as Error);
-
-    // Log to Statsig
-    logEvent('tengu_preflight_check_failed', {
-      isConnectivityError: true
-    });
-    return {
-      success: false,
-      error: `Connectivity check error: ${error instanceof Error ? (error as ErrnoException).code || error.message : String(error)}`
-    };
-  }
+  // [Restored] Skip connectivity check to Anthropic servers — this is a local/restored build.
+  return { success: true };
 }
 interface PreflightStepProps {
   onSuccess: () => void;
